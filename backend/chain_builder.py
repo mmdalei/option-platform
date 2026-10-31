@@ -55,17 +55,30 @@ def pick_underlying_price(underlying: Underlying, source: str) -> float | None:
 def pick_option_price(quote: OptionQuote, source: str) -> tuple[float | None, str | None]:
     """
     Premium fed to the IV solver and the name of the source it came from. The preferred
-    source goes first; the others are fallbacks (an illiquid contract often has no bid
-    or ask, or has not traded today).
+    source goes first; the others are fallbacks.
+
+    Eligibility:
+      mid    best bid and ask both present: it describes the market right now.
+      last   last trade, and
+      close  volume-weighted average of the session's trades:
+             both are session prices, so they count only if the contract traded in the
+             current session. For a contract with zero volume TSETMC repeats values from
+             earlier sessions (on the 2026-10-22 snapshot 86 % of such legs had
+             last == close == yesterday). Those are real but old prices and must never
+             feed the IV solver.
     """
+    traded = quote.volume > 0
     mid = (quote.bid + quote.ask) / 2.0 if quote.bid and quote.ask and quote.ask >= quote.bid else None
-    candidates = {"mid": mid, "last": quote.last, "close": quote.close}
+    candidates = {
+        "mid": mid,
+        "last": quote.last if traded else None,
+        "close": quote.close if traded else None,
+    }
     for name in [source, *(s for s in ("mid", "last", "close") if s != source)]:
         value = candidates.get(name)
         if value:
             return float(value), name
     return None, None
-
 
 def classify_moneyness(
     option_type: str, spot: float | None, strike: float, atm_band: float, closest_strike: float | None
@@ -102,7 +115,7 @@ def _leg_payload(
         "last": quote.last,
         "close": quote.close,
         "yesterday": quote.yesterday,
-        "change_pct": _pct_change(quote.last, quote.yesterday),
+        "change_pct": _pct_change(quote.last, quote.yesterday) if quote.volume > 0 else None,
         "bid": quote.bid,
         "ask": quote.ask,
         "bid_volume": quote.bid_volume,
@@ -110,6 +123,7 @@ def _leg_payload(
         "volume": quote.volume,
         "value": quote.value,
         "trades": quote.trades,
+        "traded": quote.volume > 0,  # False: last/close are carried over from an earlier session
         "open_interest": quote.open_interest,
         "oi_change": oi_change,
         "price_used": price,

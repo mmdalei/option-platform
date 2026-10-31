@@ -69,6 +69,7 @@ class OptionLeg(BaseModel):
     bid_volume: int | None
     ask_volume: int | None
     volume: int
+    traded: bool
     value: float | None
     trades: int | None
     open_interest: int | None
