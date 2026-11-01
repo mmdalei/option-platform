@@ -18,6 +18,7 @@ export interface OptionLeg {
   bid_volume: number | null;
   ask_volume: number | null;
   volume: number;
+  traded: boolean;
   value: number | null;
   trades: number | null;
   open_interest: number | null;

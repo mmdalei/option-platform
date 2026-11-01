@@ -96,9 +96,17 @@ const COLUMNS: Column[] = [
   {
     key: "last",
     label: "آخرین",
-    hint: "آخرین قیمت معامله (ریال)",
-    render: (l) => <span className="font-semibold">{fmtInt(l.last)}</span>,
-    title: (l) => l.symbol,
+    hint: "آخرین قیمت معامله (ریال)؛ کم‌رنگ یعنی در نشست اخیر معامله نشده",
+    render: (l) =>
+      l.traded || l.last == null ? (
+        <span className="font-semibold">{fmtInt(l.last)}</span>
+      ) : (
+        <span className="text-ink-soft">
+          {fmtInt(l.last)}
+          <span className="sr-only"> (قیمت نشست‌های قبل)</span>
+        </span>
+      ),
+    title: (l) => (l.traded ? l.symbol : `${l.symbol}؛ در نشست اخیر معامله نشده، قیمت مربوط به نشست‌های قبل‌تر است`),
   },
 ];
 
@@ -206,6 +214,10 @@ export default function OptionChainTable({ data, error = null }: Props) {
       <p className="text-[12px] leading-6 text-ink-soft">
         قیمت‌ها به ریال و برای هر سهم‌اند؛ اندازه هر قرارداد {fmtInt(data.contract_size)} سهم است. نوسان ضمنی و یونانی‌ها
         با مدل بلک‌شولز و نرخ بدون ریسک {fmtPercent(riskFree, 0)} محاسبه شده‌اند.
+      </p>
+      <p className="text-[12px] leading-6 text-ink-soft">
+        قیمت آخرِ کم‌رنگ یعنی قرارداد در نشست اخیر معامله نشده و قیمت مربوط به نشست‌های قبل‌تر است؛ این قیمت در
+        محاسبه نوسان ضمنی به کار نمی‌رود و ستون تغییر برای آن خالی می‌ماند.
       </p>
     </div>
   );

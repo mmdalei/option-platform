@@ -90,6 +90,11 @@ class MarketService:
         self._last_ok_at: datetime | None = None
         self._last_error: str | None = None
         self._last_history = float("-inf")
+        # change tracking: does the content of the feed really change between polls?
+        self._fingerprint: tuple | None = None
+        self._first_poll: float | None = None         # time.monotonic() of the first poll
+        self._last_change: float | None = None        # time.monotonic() of the last observed change
+        self._last_change_at: datetime | None = None  # fetch time of that poll (not market time)
 
     # -- lifecycle ----------------------------------------------------------
     def start(self) -> None:
@@ -131,6 +136,7 @@ class MarketService:
         self._last_ok = time.monotonic()
         self._last_ok_at = snapshot.fetched_at
         self._last_error = None
+        self._track_changes(snapshot)
 
         for key in self.hub.keys():  # push only the ladders somebody is watching
             payload = built.chains.get(key)
@@ -139,6 +145,36 @@ class MarketService:
 
         await self._maybe_store_history(built, snapshot.fetched_at)
         return built
+
+    @staticmethod
+    def _fingerprint_of(snapshot: MarketSnapshot) -> tuple:
+        """
+        Summary of the feed content that ignores the order of the rows but keeps duplicates:
+        sorting by repr never compares None with a number, and a repeated row stays repeated.
+        """
+        options = tuple(
+            sorted(
+                ((q.ins_code, q.last, q.bid, q.ask, q.volume, q.open_interest) for q in snapshot.options),
+                key=repr,
+            )
+        )
+        underlyings = tuple(
+            sorted(((code, u.last, u.close) for code, u in snapshot.underlyings.items()), key=repr)
+        )
+        return options, underlyings
+
+    def _track_changes(self, snapshot: MarketSnapshot) -> None:
+        """Remember when the CONTENT of the feed last differed from the previous poll."""
+        now = time.monotonic()
+        fingerprint = self._fingerprint_of(snapshot)
+
+        if self._first_poll is None:
+            self._first_poll = now
+        elif fingerprint != self._fingerprint:
+            self._last_change = now
+            self._last_change_at = snapshot.fetched_at
+
+        self._fingerprint = fingerprint
 
     async def _maybe_store_history(self, built: BuiltMarket, ts: datetime) -> None:
         now = time.monotonic()
@@ -187,11 +223,17 @@ class MarketService:
             state = "starting"
         else:
             state = "stale" if age > max(30.0, 6 * self.settings.poll_interval) else "ok"
+        reference = self._last_change if self._last_change is not None else self._first_poll
+        # without an observed change this is a lower bound: "at least this long since the first poll"
+        unchanged = None if reference is None else round(time.monotonic() - reference, 1)
         return {
             "status": state,
             "source": self.settings.source,
             "last_update": self._last_ok_at.isoformat(timespec="milliseconds") if self._last_ok_at else None,
             "age_seconds": age,
+            "change_observed": self._last_change is not None,
+            "last_change": self._last_change_at.isoformat(timespec="milliseconds") if self._last_change_at else None,
+            "unchanged_seconds": unchanged,
             "last_error": self._last_error,
             "cache": self.cache.kind,
             "contracts": self.contract_count,
