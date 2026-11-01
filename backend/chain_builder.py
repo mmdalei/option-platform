@@ -92,6 +92,16 @@ def classify_moneyness(
     return "ITM" if in_the_money else "OTM"
 
 
+def relative_spread(bid: float | None, ask: float | None) -> float | None:
+    """
+    (ask - bid) / mid as a fraction (1.18 = 118 %). None unless both sides are quoted and the
+    book is not crossed. A measurement only: no threshold is applied here.
+    """
+    if not bid or not ask or ask < bid:
+        return None
+    return (ask - bid) / ((ask + bid) / 2.0)
+
+
 def _leg_payload(
     quote: OptionQuote, spot: float | None, years: float, closest: float | None, p: PricingParams
 ) -> dict:
@@ -118,6 +128,7 @@ def _leg_payload(
         "change_pct": _pct_change(quote.last, quote.yesterday) if quote.volume > 0 else None,
         "bid": quote.bid,
         "ask": quote.ask,
+        "spread_rel": _round(relative_spread(quote.bid, quote.ask), 4),
         "bid_volume": quote.bid_volume,
         "ask_volume": quote.ask_volume,
         "volume": quote.volume,

@@ -15,6 +15,7 @@ export interface OptionLeg {
   change_pct: number | null;
   bid: number | null;
   ask: number | null;
+  spread_rel: number | null;
   bid_volume: number | null;
   ask_volume: number | null;
   volume: number;

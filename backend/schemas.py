@@ -66,6 +66,7 @@ class OptionLeg(BaseModel):
     change_pct: float | None
     bid: float | None
     ask: float | None
+    spread_rel: float | None
     bid_volume: int | None
     ask_volume: int | None
     volume: int
