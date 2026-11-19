@@ -12,16 +12,26 @@ interface Props {
 /** ▲ ۱٫۲۵٪ / ▼ ۰٫۸۰٪ : direction is carried by the arrow and a hidden label, colour is a bonus. */
 export default function Change({ value, onDark = false, digits = 2 }: Props) {
   if (value == null) {
-    return <span className={onDark ? "text-white/60" : "text-ink-soft"}>{DASH}</span>;
+    return <span className={cn("tabular-nums", onDark ? "text-ink-on-dark-soft" : "text-ink-soft")}>{DASH}</span>;
   }
   if (value === 0) {
-    return <span className={onDark ? "text-white/80" : "text-ink-soft"}>{fmtDecimal(0, digits)}٪</span>;
+    return (
+      <span className={cn("whitespace-nowrap tabular-nums", onDark ? "text-ink-on-dark-soft" : "text-ink-soft")}>
+        {fmtDecimal(0, digits)}٪
+      </span>
+    );
   }
   const up = value > 0;
-  const tone = up ? (onDark ? "text-[#6EDBA9]" : "text-up") : onDark ? "text-[#FF9A92]" : "text-down";
+  const tone = up
+    ? onDark
+      ? "text-up-on-dark"
+      : "text-up"
+    : onDark
+      ? "text-down-on-dark"
+      : "text-down";
   return (
-    <span className={cn("whitespace-nowrap", tone)}>
-      <span aria-hidden className="text-[0.7em]">
+    <span className={cn("whitespace-nowrap tabular-nums", tone)}>
+      <span aria-hidden className="inline-block align-middle text-[0.65em] leading-none">
         {up ? "▲" : "▼"}
       </span>{" "}
       {fmtDecimal(Math.abs(value), digits)}٪<span className="sr-only">{up ? " افزایش" : " کاهش"}</span>

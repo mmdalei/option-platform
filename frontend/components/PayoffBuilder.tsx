@@ -103,7 +103,7 @@ function buildRequest(spotText: string, drafts: LegDraft[]): { request: PayoffRe
 }
 
 const CONTROL =
-  "h-10 w-full rounded-md border border-rule bg-panel px-2.5 text-[14px] tabular-nums disabled:bg-paper disabled:text-ink-soft";
+  "h-10 w-full rounded-md border border-rule-strong bg-panel px-3 text-[14px] tabular-nums text-ink transition-colors duration-150 hover:border-ink-soft disabled:cursor-not-allowed disabled:border-rule disabled:bg-ledger disabled:text-ink-soft";
 
 const money = (value: number | null) => (value === null ? DASH : `${fmtInt(value)} ریال`);
 
@@ -154,16 +154,18 @@ export default function PayoffBuilder() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">ماشین‌حساب سود و زیان استراتژی</h1>
-        <p className="mt-1 text-[14px] text-ink-soft">
+      <div className="border-b border-rule pb-4">
+        <h1 className="text-[22px] font-bold leading-8 tracking-tight text-ink sm:text-[24px]">
+          ماشین‌حساب سود و زیان استراتژی
+        </h1>
+        <p className="mt-1.5 text-[14px] leading-6 text-ink-soft">
           موقعیت‌ها را وارد کنید تا نمودار سود و زیان در روز سررسید رسم شود. همه مبالغ به ریال و هر قرارداد {fmtInt(CONTRACT_SIZE)} سهم است.
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)]">
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 rounded-lg border border-rule bg-panel p-4 shadow-xs sm:grid-cols-2">
             <Field label="قیمت فعلی دارایی پایه">
               <input
                 className={CONTROL}
@@ -193,7 +195,9 @@ export default function PayoffBuilder() {
           </div>
 
           <div>
-            <p className="mb-2 text-[12px] text-ink-soft">استراتژی‌های آماده (پریمیوم‌ها نمونه‌اند؛ با قیمت واقعی جایگزین کنید)</p>
+            <p className="mb-2.5 text-[12px] font-medium leading-5 text-ink-soft">
+              استراتژی‌های آماده (پریمیوم‌ها نمونه‌اند؛ با قیمت واقعی جایگزین کنید)
+            </p>
             <div className="flex flex-wrap gap-2">
               {PRESETS.map((preset) => (
                 <button
@@ -201,7 +205,7 @@ export default function PayoffBuilder() {
                   type="button"
                   disabled={!spotIsValid}
                   onClick={() => spotValue && setLegs(preset.build(spotValue))}
-                  className="rounded-md border border-rule bg-panel px-3 py-1.5 text-[13px] hover:border-ink-soft disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center rounded-md border border-rule-strong bg-panel px-3 py-1.5 text-[13px] font-medium text-ink transition-colors duration-150 hover:border-ink-soft hover:bg-ledger active:bg-rule/40 disabled:cursor-not-allowed disabled:border-rule disabled:bg-ledger disabled:text-ink-soft disabled:opacity-65"
                 >
                   {preset.label}
                 </button>
@@ -211,8 +215,14 @@ export default function PayoffBuilder() {
 
           <ul className="space-y-3" aria-label="موقعیت‌های استراتژی">
             {legs.map((l, index) => (
-              <li key={l.id} className="rounded-md border border-rule bg-panel p-3">
-                <div className="grid grid-cols-2 gap-3">
+              <li
+                key={l.id}
+                className={cn(
+                  "rounded-lg border border-rule border-s-4 bg-panel p-3.5 shadow-xs",
+                  l.side === "long" ? "border-s-up/65" : "border-s-down/65",
+                )}
+              >
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="موقعیت">
                     <select className={CONTROL} value={l.side} onChange={(e) => update(l.id, { side: e.target.value as Side })}>
                       <option value="long">خرید</option>
@@ -246,7 +256,7 @@ export default function PayoffBuilder() {
                       type="button"
                       onClick={() => remove(l.id)}
                       aria-label={`حذف ردیف ${fmtInt(index + 1)}`}
-                      className="h-10 rounded-md px-3 text-[13px] text-down hover:bg-otm"
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-down/30 bg-otm/50 px-3.5 text-[13px] font-medium text-down transition-colors duration-150 hover:border-down/60 hover:bg-otm active:bg-otm-strong/40"
                     >
                       حذف
                     </button>
@@ -260,7 +270,7 @@ export default function PayoffBuilder() {
             type="button"
             onClick={add}
             disabled={legs.length >= 12}
-            className="w-full rounded-md border border-dashed border-ink-soft py-2 text-[14px] hover:bg-panel disabled:opacity-50"
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-dashed border-rule-strong bg-panel/70 px-4 py-2 text-[14px] font-medium text-ink transition-colors duration-150 hover:border-ink-soft hover:bg-panel active:bg-ledger disabled:cursor-not-allowed disabled:opacity-50"
           >
             افزودن ردیف
           </button>
@@ -270,9 +280,24 @@ export default function PayoffBuilder() {
           {problem && <Notice tone="info">{problem}</Notice>}
           {error && <Notice tone="error">{error}</Notice>}
 
+          {!result && !problem && !error && (
+            <div aria-busy="true" className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="h-[72px] rounded-lg border border-rule bg-panel p-3 shadow-xs">
+                    <div className="h-full rounded-sm bg-ledger motion-safe:animate-pulse" />
+                  </div>
+                ))}
+              </div>
+              <div className="h-[340px] rounded-lg border border-rule bg-panel p-4 shadow-xs">
+                <div className="h-full rounded-md bg-paper motion-safe:animate-pulse" />
+              </div>
+            </div>
+          )}
+
           {result && request && (
             <>
-              <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-rule bg-rule sm:grid-cols-4">
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Stat
                   label="حداکثر سود"
                   value={result.profit_unbounded ? "نامحدود" : money(result.max_profit)}
@@ -293,19 +318,19 @@ export default function PayoffBuilder() {
                 />
               </dl>
 
-              <div className="rounded-md border border-rule bg-panel p-3">
+              <div className="rounded-lg border border-rule bg-panel p-3 shadow-xs sm:p-4">
                 <PayoffChart x={result.x} y={result.y} spot={request.spot ?? null} breakEvens={result.break_evens} />
               </div>
 
               {result.pnl_at_spot !== null && (
-                <p className="text-[13px] text-ink-soft">
+                <p className="rounded-md border border-rule bg-panel px-4 py-2.5 text-[13px] leading-6 text-ink-soft shadow-xs">
                   اگر قیمت در سررسید برابر قیمت فعلی بماند:{" "}
                   <span className={cn("font-semibold tabular-nums", result.pnl_at_spot >= 0 ? "text-up" : "text-down")}>
                     {money(result.pnl_at_spot)}
                   </span>
                 </p>
               )}
-              <p className="text-[12px] text-ink-soft">کارمزد معاملات، مالیات و وجه تضمین در محاسبه لحاظ نشده است.</p>
+              <p className="text-[12px] leading-5 text-ink-soft">کارمزد معاملات، مالیات و وجه تضمین در محاسبه لحاظ نشده است.</p>
             </>
           )}
         </div>
@@ -317,7 +342,7 @@ export default function PayoffBuilder() {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[12px] text-ink-soft">{label}</span>
+      <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span>
       {children}
     </label>
   );
@@ -325,9 +350,14 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Stat({ label, value, tone }: { label: string; value: ReactNode; tone?: "up" | "down" }) {
   return (
-    <div className="bg-panel px-4 py-3">
-      <dt className="text-[12px] text-ink-soft">{label}</dt>
-      <dd className={cn("mt-1 text-[16px] font-bold tabular-nums", tone === "up" && "text-up", tone === "down" && "text-down")}>
+    <div className="rounded-lg border border-rule bg-panel px-3.5 py-3 shadow-xs">
+      <dt className="text-[12px] font-medium leading-5 text-ink-soft">{label}</dt>
+      <dd
+        className={cn(
+          "mt-1 text-[15px] font-bold leading-6 tabular-nums sm:text-[16px]",
+          tone === "up" ? "text-up" : tone === "down" ? "text-down" : "text-ink",
+        )}
+      >
         {value}
       </dd>
     </div>

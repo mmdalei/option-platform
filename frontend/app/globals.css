@@ -4,12 +4,20 @@
 
 @layer base {
   html {
+    color-scheme: light;
     -webkit-text-size-adjust: 100%;
   }
 
   /* Equal-width digits keep every number column aligned. */
   body {
     font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    line-height: 1.6;
+  }
+
+  svg text {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
   }
 
   :focus-visible {
@@ -19,6 +27,12 @@
 
   ::selection {
     background: theme("colors.atm.strong");
+    color: theme("colors.ink.DEFAULT");
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c3c9c4 transparent;
   }
 }
 
@@ -29,5 +43,6 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

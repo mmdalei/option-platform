@@ -71,7 +71,10 @@ const COLUMNS: Column[] = [
     hint: "نوسان ضمنی سالانه (Implied Volatility)",
     render: (l) => fmtPercent(l.iv, 1),
     title: (l) =>
-      l.price_source ? `محاسبه‌شده از ${PRICE_SOURCE_LABEL[l.price_source]}: ${fmtInt(l.price_used)} ریال` : undefined,
+      l.price_source
+        ? `محاسبه‌شده از ${PRICE_SOURCE_LABEL[l.price_source]}: ${fmtInt(l.price_used)} ریال` +
+          (l.spread_rel == null ? "" : `؛ اسپرد خرید و فروش ${fmtPercent(l.spread_rel, 1)}`)
+        : undefined,
   },
   {
     key: "bid",
@@ -88,6 +91,13 @@ const COLUMNS: Column[] = [
     title: (l) => (l.ask_volume ? `حجم صف: ${fmtInt(l.ask_volume)}` : undefined),
   },
   {
+    key: "spread",
+    label: "اسپرد",
+    hint: "اختلاف نسبی بهترین قیمت خرید و فروش نسبت به میانگین آن‌ها؛ فقط وقتی هر دو سمت دفتر پر است",
+    greeksOnly: true,
+    render: (l) => fmtPercent(l.spread_rel, 1),
+  },
+  {
     key: "chg",
     label: "تغییر",
     hint: "درصد تغییر آخرین قیمت نسبت به دیروز",
@@ -99,9 +109,9 @@ const COLUMNS: Column[] = [
     hint: "آخرین قیمت معامله (ریال)؛ کم‌رنگ یعنی در نشست اخیر معامله نشده",
     render: (l) =>
       l.traded || l.last == null ? (
-        <span className="font-semibold">{fmtInt(l.last)}</span>
+        <span className="font-semibold text-ink">{fmtInt(l.last)}</span>
       ) : (
-        <span className="text-ink-soft">
+        <span className="font-normal text-ink-soft">
           {fmtInt(l.last)}
           <span className="sr-only"> (قیمت نشست‌های قبل)</span>
         </span>
@@ -148,7 +158,7 @@ export default function OptionChainTable({ data, error = null }: Props) {
   const riskFree = Number(data.params.risk_free_rate);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Legend />
         <ModeToggle mode={mode} onChange={setMode} />
@@ -162,7 +172,7 @@ export default function OptionChainTable({ data, error = null }: Props) {
         role="region"
         aria-label="جدول زنجیره قراردادها"
         tabIndex={0}
-        className="max-h-[72vh] overflow-auto rounded-md border border-rule bg-panel"
+        className="max-h-[72vh] overflow-auto rounded-lg border border-rule bg-panel shadow-xs"
       >
         <table className="w-full border-separate border-spacing-0 text-[13px]">
           <caption className="sr-only">
@@ -172,20 +182,20 @@ export default function OptionChainTable({ data, error = null }: Props) {
             <tr>
               <th
                 colSpan={callColumns.length}
-                className="sticky top-0 z-20 h-9 border-b border-rule bg-panel px-2 text-center font-bold"
+                className="sticky top-0 z-20 h-10 whitespace-nowrap border-b border-t-2 border-b-rule border-t-itm-strong bg-ledger px-3 text-center text-[13px] font-bold text-ink"
               >
                 اختیار خرید (Call)
               </th>
               <th
                 rowSpan={2}
                 scope="col"
-                className="sticky top-0 z-20 border-x border-b border-rule bg-panel px-3 text-center font-bold"
+                className="sticky top-0 z-20 whitespace-nowrap border-x border-b border-t-2 border-x-rule-strong border-b-rule border-t-ink bg-ledger px-4 text-center text-[13px] font-bold text-ink shadow-sticky"
               >
                 قیمت اعمال
               </th>
               <th
                 colSpan={putColumns.length}
-                className="sticky top-0 z-20 h-9 border-b border-rule bg-panel px-2 text-center font-bold"
+                className="sticky top-0 z-20 h-10 whitespace-nowrap border-b border-t-2 border-b-rule border-t-otm-strong bg-ledger px-3 text-center text-[13px] font-bold text-ink"
               >
                 اختیار فروش (Put)
               </th>
@@ -211,14 +221,16 @@ export default function OptionChainTable({ data, error = null }: Props) {
         </table>
       </div>
 
-      <p className="text-[12px] leading-6 text-ink-soft">
-        قیمت‌ها به ریال و برای هر سهم‌اند؛ اندازه هر قرارداد {fmtInt(data.contract_size)} سهم است. نوسان ضمنی و یونانی‌ها
-        با مدل بلک‌شولز و نرخ بدون ریسک {fmtPercent(riskFree, 0)} محاسبه شده‌اند.
-      </p>
-      <p className="text-[12px] leading-6 text-ink-soft">
-        قیمت آخرِ کم‌رنگ یعنی قرارداد در نشست اخیر معامله نشده و قیمت مربوط به نشست‌های قبل‌تر است؛ این قیمت در
-        محاسبه نوسان ضمنی به کار نمی‌رود و ستون تغییر برای آن خالی می‌ماند.
-      </p>
+      <div className="space-y-1.5 border-t border-rule pt-3">
+        <p className="text-[12px] leading-6 text-ink-soft">
+          قیمت‌ها به ریال و برای هر سهم‌اند؛ اندازه هر قرارداد {fmtInt(data.contract_size)} سهم است. نوسان ضمنی و یونانی‌ها
+          با مدل بلک‌شولز و نرخ بدون ریسک {fmtPercent(riskFree, 0)} محاسبه شده‌اند.
+        </p>
+        <p className="text-[12px] leading-6 text-ink-soft">
+          قیمت آخرِ کم‌رنگ یعنی قرارداد در نشست اخیر معامله نشده و قیمت مربوط به نشست‌های قبل‌تر است؛ این قیمت در
+          محاسبه نوسان ضمنی به کار نمی‌رود و ستون تغییر برای آن خالی می‌ماند.
+        </p>
+      </div>
     </div>
   );
 }
@@ -228,7 +240,7 @@ function HeaderCell({ column }: { column: Column }) {
     <th
       scope="col"
       title={column.hint}
-      className="sticky top-9 z-20 h-8 whitespace-nowrap border-b border-rule bg-panel px-2 text-center text-[12px] font-medium text-ink-soft"
+      className="sticky top-10 z-20 h-9 whitespace-nowrap border-b border-rule bg-paper px-2.5 text-center text-[12px] font-medium text-ink-soft shadow-sticky"
     >
       {column.label}
     </th>
@@ -245,17 +257,17 @@ function ChainTr({
   putColumns: Column[];
 }) {
   return (
-    <tr>
+    <tr className="group">
       <SideCells leg={row.call} columns={callColumns} side="call" />
       <th
         scope="row"
         className={cn(
-          "border-x border-b border-rule px-3 py-1.5 text-center font-bold tabular-nums",
-          row.is_atm ? "bg-atm-strong" : "bg-panel",
+          "whitespace-nowrap border-x border-b border-x-rule-strong border-b-rule px-3.5 py-2 text-center font-bold tabular-nums text-ink transition-colors duration-100",
+          row.is_atm ? "bg-atm-strong" : "bg-ledger/70 group-hover:bg-ledger",
         )}
       >
         {fmtInt(row.strike)}
-        {row.is_atm && <span className="block text-[10px] font-medium leading-3 text-ink-soft">سر به سر</span>}
+        {row.is_atm && <span className="mt-0.5 block text-[10px] font-medium leading-3 text-ink-soft">سر به سر</span>}
       </th>
       <SideCells leg={row.put} columns={putColumns} side="put" />
     </tr>
@@ -266,7 +278,10 @@ function ChainTr({
 function SideCells({ leg, columns, side }: { leg: OptionLeg | null; columns: Column[]; side: "call" | "put" }) {
   if (!leg) {
     return (
-      <td colSpan={columns.length} className="border-b border-rule/60 px-2 py-1.5 text-center text-ink-soft">
+      <td
+        colSpan={columns.length}
+        className="border-b border-rule/70 bg-panel px-2.5 py-2 text-center text-ink-soft transition-colors duration-100 group-hover:bg-paper"
+      >
         {DASH}
       </td>
     );
@@ -278,8 +293,8 @@ function SideCells({ leg, columns, side }: { leg: OptionLeg | null; columns: Col
           key={`${side}-${column.key}`}
           title={column.title?.(leg)}
           className={cn(
-            "whitespace-nowrap border-b border-rule/60 px-2 py-1.5 text-center tabular-nums",
-            leg.moneyness && TINT[leg.moneyness],
+            "whitespace-nowrap border-b border-rule/70 px-2.5 py-2 text-center tabular-nums text-ink transition-shadow duration-100 group-hover:shadow-[inset_0_0_0_9999px_rgba(23,28,25,0.045)]",
+            leg.moneyness ? TINT[leg.moneyness] : "bg-panel",
           )}
         >
           {column.render(leg)}
@@ -293,9 +308,9 @@ function SideCells({ leg, columns, side }: { leg: OptionLeg | null; columns: Col
 function SpotRow({ underlying, colSpan }: { underlying: UnderlyingQuote; colSpan: number }) {
   return (
     <tr aria-label="قیمت فعلی دارایی پایه">
-      <td colSpan={colSpan} className="bg-ink px-3 py-1.5 text-center text-white">
+      <td colSpan={colSpan} className="border-y border-ink bg-ink px-4 py-2 text-center text-white">
         <span className="font-bold">{underlying.symbol}</span>
-        <span className="mx-4 tabular-nums">{fmtInt(underlying.price)} ریال</span>
+        <span className="mx-4 font-semibold tabular-nums">{fmtInt(underlying.price)} ریال</span>
         <Change value={underlying.change_pct} onDark />
       </td>
     </tr>
@@ -309,10 +324,10 @@ function Legend() {
     { label: "در زیان (OTM)", swatch: "bg-otm ring-otm-strong" },
   ];
   return (
-    <ul className="flex flex-wrap items-center gap-4 text-[12px] text-ink-soft" aria-label="راهنمای رنگ‌ها">
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-soft" aria-label="راهنمای رنگ‌ها">
       {items.map((item) => (
         <li key={item.label} className="flex items-center gap-1.5">
-          <span aria-hidden className={cn("inline-block h-3 w-5 rounded-sm ring-1 ring-inset", item.swatch)} />
+          <span aria-hidden className={cn("inline-block h-3.5 w-5 rounded-sm ring-1 ring-inset", item.swatch)} />
           {item.label}
         </li>
       ))}
@@ -329,7 +344,7 @@ function ModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewM
     <div
       role="group"
       aria-label="ستون‌های نمایش‌داده‌شده"
-      className="inline-flex overflow-hidden rounded-md border border-rule bg-panel text-[13px]"
+      className="inline-flex rounded-md border border-rule-strong bg-ledger p-0.5 text-[13px] shadow-xs"
     >
       {options.map((option) => (
         <button
@@ -338,8 +353,10 @@ function ModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewM
           aria-pressed={mode === option.value}
           onClick={() => onChange(option.value)}
           className={cn(
-            "px-3.5 py-1.5",
-            mode === option.value ? "bg-ink font-semibold text-white" : "text-ink-soft hover:text-ink",
+            "inline-flex min-h-10 items-center justify-center rounded-[4px] px-4 transition-colors duration-150",
+            mode === option.value
+              ? "bg-ink font-semibold text-white shadow-xs hover:bg-ink/90 focus-visible:outline-focus-on-dark"
+              : "font-medium text-ink-soft hover:bg-panel/75 hover:text-ink active:bg-panel",
           )}
         >
           {option.label}
@@ -351,10 +368,17 @@ function ModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewM
 
 function Skeleton() {
   return (
-    <div aria-busy="true" aria-label="در حال بارگذاری" className="space-y-1 rounded-md border border-rule bg-panel p-2">
-      {Array.from({ length: 9 }, (_, i) => (
-        <div key={i} className="h-8 rounded-sm bg-paper motion-safe:animate-pulse" />
-      ))}
+    <div
+      aria-busy="true"
+      aria-label="در حال بارگذاری"
+      className="space-y-2 rounded-lg border border-rule bg-panel p-3 shadow-xs"
+    >
+      <div className="h-10 rounded-md bg-ledger motion-safe:animate-pulse" />
+      <div className="space-y-1.5">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="h-9 rounded-sm bg-paper motion-safe:animate-pulse" />
+        ))}
+      </div>
     </div>
   );
 }

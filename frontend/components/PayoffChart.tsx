@@ -15,7 +15,7 @@ interface Props {
 
 const W = 960;
 const H = 400;
-const PAD = { top: 30, right: 24, bottom: 44, left: 104 };
+const PAD = { top: 42, right: 28, bottom: 52, left: 108 };
 
 /** "Nice" tick values (1, 2, 2.5, 5 x 10^n) covering [lo, hi]. */
 function niceTicks(lo: number, hi: number, target = 5): number[] {
@@ -86,7 +86,7 @@ export default function PayoffChart({ x, y, spot = null, breakEvens }: Props) {
       ? null
       : (() => {
           const px = g.sx(x[hover]);
-          const boxW = 200;
+          const boxW = 208;
           return {
             px,
             py: g.sy(y[hover]),
@@ -116,14 +116,14 @@ export default function PayoffChart({ x, y, spot = null, breakEvens }: Props) {
         </clipPath>
       </defs>
 
-      <text x={PAD.left} y={16} fontSize={12} className="fill-ink-soft">
+      <text x={PAD.left} y={16} fontSize={12} className="fill-ink-soft font-medium">
         سود و زیان در سررسید (ریال)
       </text>
 
       {g.yTicks.map((tick) => (
         <g key={`y-${tick}`}>
           <line x1={PAD.left} x2={W - PAD.right} y1={g.sy(tick)} y2={g.sy(tick)} className="stroke-rule" strokeWidth={1} />
-          <text x={PAD.left - 10} y={g.sy(tick) + 4} textAnchor="end" fontSize={12} className="fill-ink-soft">
+          <text x={PAD.left - 12} y={g.sy(tick) + 4} textAnchor="end" fontSize={12} className="fill-ink-soft">
             {fmtCompact(tick)}
           </text>
         </g>
@@ -133,42 +133,59 @@ export default function PayoffChart({ x, y, spot = null, breakEvens }: Props) {
           {fmtInt(tick)}
         </text>
       ))}
-      <text x={W - PAD.right} y={H - 6} textAnchor="end" fontSize={12} className="fill-ink-soft">
+      <text x={W - PAD.right} y={H - 8} textAnchor="end" fontSize={12} className="fill-ink-soft font-medium">
         قیمت دارایی پایه در سررسید (ریال)
       </text>
 
-      <path d={g.area} fill="rgba(12,122,77,0.20)" clipPath={`url(#${uid}-above)`} />
-      <path d={g.area} fill="rgba(179,38,30,0.18)" clipPath={`url(#${uid}-below)`} />
+      <path d={g.area} className="fill-up/20" clipPath={`url(#${uid}-above)`} />
+      <path d={g.area} className="fill-down/20" clipPath={`url(#${uid}-below)`} />
       <line x1={PAD.left} x2={W - PAD.right} y1={g.zero} y2={g.zero} className="stroke-ink-soft" strokeWidth={1.5} />
       <path d={g.line} fill="none" className="stroke-ink" strokeWidth={2.5} strokeLinejoin="round" />
 
-      {spot != null && inRange(spot) && (
-        <g>
-          <line x1={g.sx(spot)} x2={g.sx(spot)} y1={PAD.top} y2={H - PAD.bottom} className="stroke-ink-soft" strokeDasharray="5 4" />
-          <text x={g.sx(spot)} y={PAD.top - 6} textAnchor="middle" fontSize={11} className="fill-ink-soft">
-            قیمت فعلی
-          </text>
-        </g>
-      )}
+      {spot != null && inRange(spot) && (() => {
+        const spotX = g.sx(spot);
+        const anchor = spotX < PAD.left + 32 ? "start" : spotX > W - PAD.right - 32 ? "end" : "middle";
+        return (
+          <g>
+            <line x1={spotX} x2={spotX} y1={PAD.top} y2={H - PAD.bottom} className="stroke-ink-soft" strokeDasharray="5 4" />
+            <text x={spotX} y={PAD.top - 8} textAnchor={anchor} fontSize={11} className="fill-ink-soft font-medium">
+              قیمت فعلی
+            </text>
+          </g>
+        );
+      })()}
 
-      {breakEvens.filter(inRange).map((be) => (
-        <g key={`be-${be}`}>
-          <circle cx={g.sx(be)} cy={g.zero} r={5} className="fill-panel stroke-ink" strokeWidth={2} />
-          <text x={g.sx(be)} y={g.zero + 20} textAnchor="middle" fontSize={11} className="fill-ink">
-            {fmtInt(be)}
-          </text>
-        </g>
-      ))}
+      {breakEvens.filter(inRange).map((be) => {
+        const bx = g.sx(be);
+        const labelY = g.zero > H - PAD.bottom - 24 ? g.zero - 14 : g.zero + 20;
+        return (
+          <g key={`be-${be}`}>
+            <circle cx={bx} cy={g.zero} r={5} className="fill-panel stroke-ink" strokeWidth={2} />
+            <text
+              x={bx}
+              y={labelY}
+              textAnchor="middle"
+              fontSize={11}
+              strokeWidth={4}
+              strokeLinejoin="round"
+              style={{ paintOrder: "stroke" }}
+              className="fill-ink stroke-panel font-semibold"
+            >
+              {fmtInt(be)}
+            </text>
+          </g>
+        );
+      })}
 
       {tooltip && (
         <g pointerEvents="none">
           <line x1={tooltip.px} x2={tooltip.px} y1={PAD.top} y2={H - PAD.bottom} className="stroke-ink-soft" strokeDasharray="3 3" />
-          <circle cx={tooltip.px} cy={tooltip.py} r={4.5} className="fill-ink" />
-          <rect x={tooltip.boxX} y={PAD.top + 4} width={tooltip.boxW} height={42} rx={4} className="fill-ink" />
-          <text x={tooltip.boxX + tooltip.boxW / 2} y={PAD.top + 21} textAnchor="middle" fontSize={12} className="fill-white">
+          <circle cx={tooltip.px} cy={tooltip.py} r={4.5} className="fill-ink stroke-panel" strokeWidth={1.5} />
+          <rect x={tooltip.boxX} y={PAD.top + 6} width={tooltip.boxW} height={46} rx={6} className="fill-ink" />
+          <text x={tooltip.boxX + tooltip.boxW / 2} y={PAD.top + 24} textAnchor="middle" fontSize={12} className="fill-white">
             {`قیمت: ${tooltip.price}`}
           </text>
-          <text x={tooltip.boxX + tooltip.boxW / 2} y={PAD.top + 38} textAnchor="middle" fontSize={12} className="fill-white">
+          <text x={tooltip.boxX + tooltip.boxW / 2} y={PAD.top + 42} textAnchor="middle" fontSize={12} className="fill-white font-semibold">
             {`سود/زیان: ${tooltip.pnl}`}
           </text>
         </g>
