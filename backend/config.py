@@ -34,6 +34,11 @@ def _csv(name: str, default: str) -> tuple[str, ...]:
     return tuple(p.strip() for p in os.getenv(name, default).split(",") if p.strip())
 
 
+def default_database_url() -> str:
+    """One file per source, so demo and live can never share a database."""
+    return f"sqlite:///./options_{_str('OPTIONS_SOURCE', 'live').lower()}.db"
+
+
 @dataclass(frozen=True)
 class Settings:
     # -- Data source ------------------------------------------------------
@@ -46,7 +51,8 @@ class Settings:
     # -- Storage ----------------------------------------------------------
     # PostgreSQL example: postgresql+psycopg://user:pass@localhost:5432/options
     # (then: pip install "psycopg[binary]")
-    database_url: str = _str("DATABASE_URL", "sqlite:///./options.db")
+    # Default is sqlite:///./options_<source>.db; set DATABASE_URL only to move the file elsewhere.
+    database_url: str = _str("DATABASE_URL", default_database_url())
     redis_url: str = _str("REDIS_URL", "")                        # empty -> in-process cache
     cache_ttl: int = _int("CACHE_TTL_SECONDS", 120)
     history_interval: float = _float("HISTORY_INTERVAL_SECONDS", 60.0)

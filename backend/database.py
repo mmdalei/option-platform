@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, insert, select
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, func, insert, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
@@ -49,6 +49,23 @@ class Quote(Base):
     delta: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
+class Meta(Base):
+    """Key/value table: which source owns this database and which schema version it has."""
+
+    __tablename__ = "meta"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+SCHEMA_VERSION = 1
+KNOWN_SOURCES = frozenset({"live", "demo", "replay"})  # replay arrives in M6
+
+
+class SourceMismatchError(RuntimeError):
+    """The database belongs to another source (or carries no tag). Startup must stop."""
+
+
 class Database:
     def __init__(self, url: str) -> None:
         options: dict = {"pool_pre_ping": True}
@@ -60,6 +77,64 @@ class Database:
         Base.metadata.create_all(self.engine)
         self._known: set[str] = set()
         self._last_state: dict[str, tuple] = {}
+
+    # -- source guard ----------------------------------------------------------
+    def get_meta(self, key: str) -> str | None:
+        with Session(self.engine) as session:
+            row = session.get(Meta, key)
+        return None if row is None else row.value
+
+    def row_counts(self) -> tuple[int, int]:
+        """(contracts, quotes) - tells an empty database from a legacy one."""
+        with Session(self.engine) as session:
+            contracts = session.execute(select(func.count()).select_from(Contract)).scalar_one()
+            quotes = session.execute(select(func.count()).select_from(Quote)).scalar_one()
+        return int(contracts), int(quotes)
+
+    def ensure_source(self, source: str) -> None:
+        """
+        Make sure this database belongs to `source` before anything is written to it.
+
+        no tag + empty database -> tag it (source and schema_version)
+        no tag + rows           -> refuse: a database from before M3a may hold demo data
+        tag != source           -> refuse: live and demo must never share one file
+        """
+        if source not in KNOWN_SOURCES:
+            raise SourceMismatchError(
+                f"unknown source {source!r}; expected one of {sorted(KNOWN_SOURCES)}"
+            )
+        stored = self.get_meta("source")
+        if stored is None:
+            contracts, quotes = self.row_counts()
+            if contracts or quotes:
+                raise SourceMismatchError(
+                    f"database {self.engine.url} holds {contracts} contracts and {quotes} quotes "
+                    "but has no source tag. Refusing to start: an untagged database may contain "
+                    "demo data. Back it up, then either label it "
+                    "(python tools/label_db.py --source <source> --force) or move it aside and "
+                    "start with an empty database."
+                )
+            with Session(self.engine) as session, session.begin():
+                session.merge(Meta(key="source", value=source))
+                session.merge(Meta(key="schema_version", value=str(SCHEMA_VERSION)))
+            return
+        if stored != source:
+            raise SourceMismatchError(
+                f"database {self.engine.url} is tagged source={stored!r} but this run is "
+                f"source={source!r}. Refusing to start: live and demo data must never share one "
+                "database. Point DATABASE_URL at another file (default: "
+                "sqlite:///./options_<source>.db) or label the database explicitly with "
+                "tools/label_db.py."
+            )
+        version = self.get_meta("schema_version")
+        if version is None:
+            with Session(self.engine) as session, session.begin():
+                session.merge(Meta(key="schema_version", value=str(SCHEMA_VERSION)))
+        elif version != str(SCHEMA_VERSION):
+            raise SourceMismatchError(
+                f"database {self.engine.url} has schema_version={version!r} but this code expects "
+                f"{SCHEMA_VERSION}. Refusing to start: apply the matching migration first."
+            )
 
     def save_snapshot(self, contracts: list[dict], ts: datetime) -> int:
         """Store the contracts that changed since their last stored row. Returns rows written."""

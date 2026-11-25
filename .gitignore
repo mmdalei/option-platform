@@ -5,6 +5,11 @@ __pycache__/
 .pytest_cache/
 backend/.env
 backend/options.db
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # Node / Next.js
 frontend/node_modules/
