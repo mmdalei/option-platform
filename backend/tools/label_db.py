@@ -69,6 +69,7 @@ def main() -> int:
             print("Back it up, then re-run with --force if you are sure of the source.")
             return 2
 
+        db.create_schema()  # the meta table may not exist yet: that is exactly what we are adding
         with Session(db.engine) as session, session.begin():
             session.merge(Meta(key="source", value=args.source))
             session.merge(Meta(key="schema_version", value=str(SCHEMA_VERSION)))
