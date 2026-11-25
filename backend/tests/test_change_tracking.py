@@ -26,7 +26,9 @@ def make_snapshot():
 
 
 def make_service() -> MarketService:
-    return MarketService(CFG, collector=None, cache=MemoryCache(), db=Database("sqlite://"))
+    db = Database("sqlite://")
+    db.ensure_source("demo")  # creates the schema only after the source is accepted
+    return MarketService(CFG, collector=None, cache=MemoryCache(), db=db)
 
 
 def ingest(service: MarketService, *snapshots) -> None:

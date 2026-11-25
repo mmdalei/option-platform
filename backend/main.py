@@ -27,13 +27,14 @@ from cache import create_cache
 from calculator import Leg, strategy_payoff
 from config import Settings
 from config import settings as default_settings
-from database import Database
+from database import Database, SourceMismatchError
 from demo_collector import DemoCollector
 from schemas import ChainResponse, PayoffRequest, PayoffResponse, UnderlyingMeta
 from service import MarketService, NoDataError, NotFoundError, chain_key
 from tsetmc_collector import TSETMCCollector
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("main")
 
 
 @contextmanager
@@ -55,6 +56,12 @@ def create_app(settings: Settings | None = None, collector=None) -> FastAPI:
     async def lifespan(app: FastAPI):
         cache = await create_cache(cfg.redis_url)
         db = Database(cfg.database_url)
+        try:
+            db.ensure_source(cfg.source)  # before any write: live and demo never share a file
+        except SourceMismatchError as exc:
+            log.critical("refusing to start: %s", exc)
+            await cache.aclose()
+            raise
         source = collector or (DemoCollector(cfg) if cfg.source == "demo" else TSETMCCollector(cfg))
         service = MarketService(cfg, source, cache, db)
         app.state.service = service

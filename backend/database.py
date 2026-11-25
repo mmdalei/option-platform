@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, insert, select
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, func, insert, inspect, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
@@ -49,6 +49,23 @@ class Quote(Base):
     delta: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
+class Meta(Base):
+    """Key/value table: which source owns this database and which schema version it has."""
+
+    __tablename__ = "meta"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+SCHEMA_VERSION = 1
+KNOWN_SOURCES = frozenset({"live", "demo", "replay"})  # replay arrives in M6
+
+
+class SourceMismatchError(RuntimeError):
+    """The database belongs to another source (or carries no tag). Startup must stop."""
+
+
 class Database:
     def __init__(self, url: str) -> None:
         options: dict = {"pool_pre_ping": True}
@@ -57,9 +74,83 @@ class Database:
             if url in ("sqlite://", "sqlite:///:memory:"):
                 options["poolclass"] = StaticPool  # one shared connection for in-memory DBs
         self.engine = create_engine(url, **options)
-        Base.metadata.create_all(self.engine)
+        # Tables are NOT created here: a legacy database must stay byte-for-byte untouched
+        # until ensure_source() has accepted it (M3a). Call create_schema() after the guard.
         self._known: set[str] = set()
         self._last_state: dict[str, tuple] = {}
+
+    # -- source guard ----------------------------------------------------------
+    def has_table(self, name: str) -> bool:
+        return inspect(self.engine).has_table(name)
+
+    def create_schema(self) -> None:
+        """Create the tables that are missing. Only after ensure_source() accepted the database."""
+        Base.metadata.create_all(self.engine)
+
+    def get_meta(self, key: str) -> str | None:
+        if not self.has_table(Meta.__tablename__):
+            return None  # a database from before M3a has no meta table: it counts as untagged
+        with Session(self.engine) as session:
+            row = session.get(Meta, key)
+        return None if row is None else row.value
+
+    def row_counts(self) -> tuple[int, int]:
+        """(contracts, quotes) - tells an empty database from a legacy one."""
+        existing = {model.__tablename__: self.has_table(model.__tablename__) for model in (Contract, Quote)}
+        counts = [0, 0]
+        with Session(self.engine) as session:
+            for i, model in enumerate((Contract, Quote)):
+                if existing[model.__tablename__]:
+                    counts[i] = int(session.execute(select(func.count()).select_from(model)).scalar_one())
+        return counts[0], counts[1]
+
+    def ensure_source(self, source: str) -> None:
+        """
+        Make sure this database belongs to `source` before anything is written to it.
+        Nothing is created and nothing is written until the source has been accepted.
+
+        no tag + empty database -> create the schema, then tag it (source and schema_version)
+        no tag + rows           -> refuse: a database from before M3a may hold demo data
+        tag != source           -> refuse: live and demo must never share one file
+        """
+        if source not in KNOWN_SOURCES:
+            raise SourceMismatchError(
+                f"unknown source {source!r}; expected one of {sorted(KNOWN_SOURCES)}"
+            )
+        stored = self.get_meta("source")
+        if stored is None:
+            contracts, quotes = self.row_counts()
+            if contracts or quotes:
+                raise SourceMismatchError(  # nothing has been created or written
+                    f"database {self.engine.url} holds {contracts} contracts and {quotes} quotes "
+                    "but has no source tag. Refusing to start: an untagged database may contain "
+                    "demo data. Back it up, then either label it "
+                    "(python tools/label_db.py --source <source> --force) or move it aside and "
+                    "start with an empty database."
+                )
+            self.create_schema()
+            with Session(self.engine) as session, session.begin():
+                session.merge(Meta(key="source", value=source))
+                session.merge(Meta(key="schema_version", value=str(SCHEMA_VERSION)))
+            return
+        if stored != source:
+            raise SourceMismatchError(
+                f"database {self.engine.url} is tagged source={stored!r} but this run is "
+                f"source={source!r}. Refusing to start: live and demo data must never share one "
+                "database. Point DATABASE_URL at another file (default: "
+                "sqlite:///./options_<source>.db) or label the database explicitly with "
+                "tools/label_db.py."
+            )
+        version = self.get_meta("schema_version")
+        if version is not None and version != str(SCHEMA_VERSION):
+            raise SourceMismatchError(
+                f"database {self.engine.url} has schema_version={version!r} but this code expects "
+                f"{SCHEMA_VERSION}. Refusing to start: apply the matching migration first."
+            )
+        self.create_schema()  # accepted: tables added by a later migration may be missing
+        if version is None:
+            with Session(self.engine) as session, session.begin():
+                session.merge(Meta(key="schema_version", value=str(SCHEMA_VERSION)))
 
     def save_snapshot(self, contracts: list[dict], ts: datetime) -> int:
         """Store the contracts that changed since their last stored row. Returns rows written."""
